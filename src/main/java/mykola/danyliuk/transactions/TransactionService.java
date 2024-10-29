@@ -3,6 +3,8 @@ package mykola.danyliuk.transactions;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -13,30 +15,28 @@ import org.web3j.protocol.http.HttpService;
 
 import jakarta.annotation.PostConstruct;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-
-import static java.lang.Character.SPACE_SEPARATOR;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class TransactionService {
 
-    private static final int CACHE_SIZE = 10;
-    private static final int DB_SIZE = 1000;
+    private static final int CACHE_SIZE = 10; // how many blocks to keep in cache
+    private static final int DB_SIZE = 1000; // how many blocks to keep in main DB
+    private static final int CACHE_CLEANUP_SCHEDULE_RATE = 1;
+    private static final int DB_CLEANUP_SCHEDULE_RATE = 60;
+
     private static final String INFURA_BASIC_URL = "https://mainnet.infura.io/v3/";
 
     private final TransactionRepository transactionRepository;
     private final TransactionArchiveRepository transactionArchiveRepository;
-    private final TransactionESRepository transactionESRepository;
-
 
     @Value("${infura.api.key}")
     private String infuraApiKey;
-
     private Web3j web3j;
 
     private final ConcurrentHashMap<String, TransactionModel> transactionCache = new ConcurrentHashMap<>();
@@ -65,11 +65,7 @@ public class TransactionService {
         Optional<TransactionModel> existingTransaction = transactionRepository.findByHash(tx.getHash());
         if (existingTransaction.isEmpty()) {
             long blockNumber = tx.getBlockNumber().longValue();
-            String fts = new StringBuilder(tx.getFrom()).append(SPACE_SEPARATOR)
-                .append(tx.getTo()).append(SPACE_SEPARATOR)
-                .append(tx.getInput()).append(SPACE_SEPARATOR)
-                .append(tx.getHash()).append(SPACE_SEPARATOR)
-                .append(blockNumber).toString();
+            String fts = buildFts(tx, blockNumber);
             TransactionModel model = TransactionModel.builder()
                 .hash(tx.getHash())
                 .from(tx.getFrom())
@@ -96,13 +92,21 @@ public class TransactionService {
                 .build();
             transactionRepository.save(model);
             transactionArchiveRepository.save(archiveModel);
-            writeIntoCachesAndES(model);
+            writeIntoCaches(model);
         }
     }
 
+    private String buildFts(Transaction tx, long blockNumber) {
+        return String.format("%s %s %s %s %d",
+            tx.getFrom(),
+            tx.getTo(),
+            tx.getInput(),
+            tx.getHash(),
+            blockNumber);
+    }
+
     @Async
-    protected void writeIntoCachesAndES(TransactionModel model) {
-        transactionESRepository.save(model);
+    protected void writeIntoCaches(TransactionModel model) {
         transactionCache.put(model.getHash(), model);
         var value = blockCache.get(model.getBlockNumber());
         if (value != null) {
@@ -115,7 +119,7 @@ public class TransactionService {
     }
 
     @Transactional
-    @Scheduled(fixedRate = 60_000) // Runs every 60 seconds
+    @Scheduled(fixedRate = CACHE_CLEANUP_SCHEDULE_RATE, timeUnit = TimeUnit.MINUTES)
     public void scheduledCacheCleanup() {
         log.info("Starting scheduled cache cleanup, current cache size: {}", transactionCache.size());
         long maxBlockNumberLimit = transactionRepository.maxBlockNumber().orElseThrow() - CACHE_SIZE;
@@ -125,12 +129,12 @@ public class TransactionService {
     }
 
     @Transactional
-    @Scheduled(fixedRate = 10 * 60_000) // Runs every 10 minutes
+    @Scheduled(fixedRate = DB_CLEANUP_SCHEDULE_RATE, timeUnit = TimeUnit.MINUTES)
     public void scheduledDBCleanup() {
         // todo consider using pg_cron
         // todo After deletions, it’s important to run VACUUM on the main table to reclaim space and optimize performance.
         log.info("Starting scheduled DB cleanup");
-        Long maxBlockNumberLimit = transactionRepository.maxBlockNumber().orElseThrow() - DB_SIZE;
+        Long maxBlockNumberLimit = transactionRepository.maxBlockNumber().orElse(Long.MAX_VALUE) - DB_SIZE;
         int deleted = transactionRepository.deleteByBlockNumberLessThan(maxBlockNumberLimit);
         log.info("Deleted {} transactions", deleted);
     }
@@ -165,8 +169,8 @@ public class TransactionService {
         return transactionArchiveRepository.findByBlockNumber(blockNumber);
     }
 
-    public List<TransactionModel> searchTransactions(String query) {
-        return Collections.emptyList();
+    public Page<? extends TransactionBaseModel> fullTextSearch(String query, int page, int size) {
+        return transactionArchiveRepository.findByFtsLikeIgnoreCase("%" + query + "%", PageRequest.of(page, size));
     }
 
 
