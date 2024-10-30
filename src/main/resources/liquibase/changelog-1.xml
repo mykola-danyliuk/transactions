@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <changeSet id="1.1" author="Mykola Danyliuk">
+        <createTable tableName="transactions">
+            <column name="hash" type="varchar(255)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="from_address" type="varchar(255)"/>
+            <column name="to_address" type="varchar(255)"/>
+            <column name="value" type="varchar(255)"/>
+            <column name="gas_price" type="varchar(255)"/>
+            <column name="gas" type="varchar(255)"/>
+            <column name="input" type="text"/>
+            <column name="block_number" type="bigint"/>
+            <column name="transaction_index" type="varchar(255)"/>
+            <column name="fts" type="text"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="1.2" author="Mykola Danyliuk">
+        <createIndex indexName="transactions_block_number_index" tableName="transactions">
+            <column name="block_number"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="1.3" author="Mykola Danyliuk">
+        <createTable tableName="transactions_archive">
+            <column name="hash" type="varchar(255)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="from_address" type="varchar(255)"/>
+            <column name="to_address" type="varchar(255)"/>
+            <column name="value" type="varchar(255)"/>
+            <column name="gas_price" type="varchar(255)"/>
+            <column name="gas" type="varchar(255)"/>
+            <column name="input" type="text"/>
+            <column name="block_number" type="bigint"/>
+            <column name="transaction_index" type="varchar(255)"/>
+            <column name="fts" type="text"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="1.4" author="Mykola Danyliuk">
+        <createIndex indexName="transactions_archive_block_number_index" tableName="transactions_archive">
+            <column name="block_number"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

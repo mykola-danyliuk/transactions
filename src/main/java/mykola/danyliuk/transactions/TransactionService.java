@@ -122,7 +122,7 @@ public class TransactionService {
     @Scheduled(fixedRate = CACHE_CLEANUP_SCHEDULE_RATE, timeUnit = TimeUnit.MINUTES)
     public void scheduledCacheCleanup() {
         log.info("Starting scheduled cache cleanup, current cache size: {}", transactionCache.size());
-        long maxBlockNumberLimit = transactionRepository.maxBlockNumber().orElseThrow() - CACHE_SIZE;
+        long maxBlockNumberLimit = transactionRepository.maxBlockNumber().orElse(Long.MAX_VALUE) - CACHE_SIZE;
         transactionCache.entrySet().removeIf(entry -> entry.getValue().getBlockNumber() < maxBlockNumberLimit);
         blockCache.entrySet().removeIf(entry -> entry.getKey() < maxBlockNumberLimit);
         log.info("Cache cleanup finished, current cache size: {}", transactionCache.size());
