@@ -161,6 +161,7 @@ public class TransactionService {
         return transactionArchiveRepository.findByBlockNumber(blockNumber);
     }
 
+    // We need pg_trgm extension to add index on text column, so it is not performant enough
     // todo rewrite with using elasticsearch in next version
     public Page<? extends TransactionBaseModel> fullTextSearch(String query, int page, int size) {
         return transactionArchiveRepository.findByFtsLikeIgnoreCase("%" + query + "%", PageRequest.of(page, size));
